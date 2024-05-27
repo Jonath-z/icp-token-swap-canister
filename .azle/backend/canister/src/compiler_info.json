@@ -1,0 +1,1 @@
+{"canister_methods":{"queries":[{"name":"listBalances","composite":false}],"updates":[{"name":"deposit"},{"name":"withdraw"},{"name":"swap"}],"callbacks":{}},"env_vars":[]}

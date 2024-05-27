@@ -1,0 +1,25 @@
+{
+  "canisters": {
+    "backend": {
+      "type": "custom",
+      "main": "src/backend/index.ts",
+      "candid": "src/backend/index.did",
+      "build": "npx azle backend",
+      "wasm": ".azle/backend/backend.wasm",
+      "gzip": true,
+      "assets": [["src/frontend/dist", "dist"]],
+      "build_assets": "npm run build",
+      ".env": ["AZLE_TEST_FETCH"]
+    },
+    "token_a": {
+      "type": "custom",
+      "candid": "src/backend/token_a.did",
+      "wasm": "https://download.dfinity.systems/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/canisters/ic-icrc1-ledger.wasm.gz"
+    },
+    "token_b": {
+      "type": "custom",
+      "candid": "src/backend/token_b.did",
+      "wasm": "https://download.dfinity.systems/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/canisters/ic-icrc1-ledger.wasm.gz"
+    }
+  }
+}
