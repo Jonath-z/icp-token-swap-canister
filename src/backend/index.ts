@@ -2,38 +2,25 @@ import {
   blob,
   Canister,
   ic,
-  init,
   nat,
   nat64,
-  nat8,
   None,
   Opt,
   Principal,
   query,
-  serialize,
-  Some,
   StableBTreeMap,
   text,
-  Tuple,
   update,
   Record,
-  Vec,
+  init,
 } from "azle";
 import {
   Account,
-  AllowanceArgs,
-  AllowanceResult,
-  ApproveArgs,
-  ApproveResult,
   ICRC,
-  SupportedStandard,
   TransferArgs,
-  TransferFromArgs,
   TransferFromResult,
   TransferResult,
-  Value,
 } from "azle/canisters/icrc";
-import { getCanisterId } from "azle/dfx";
 
 const DepositArgs = Record({
   spender_subaccount: Opt(text),
@@ -41,7 +28,16 @@ const DepositArgs = Record({
   from: Account,
   amount: nat,
   fee: Opt(nat),
-  memo: blob,
+  memo: Opt(blob),
+  created_at_time: Opt(nat64),
+});
+
+const WithdrawArgs = Record({
+  token: Principal,
+  to: Account,
+  amount: nat,
+  fee: Opt(nat),
+  memo: Opt(blob),
   created_at_time: Opt(nat64),
 });
 
@@ -49,7 +45,22 @@ const DepositArgs = Record({
 const balanceA = StableBTreeMap<string, number>(0);
 const balanceB = StableBTreeMap<string, number>(1);
 
+let tokenA: Principal;
+let tokenB: Principal;
+
+const InitArgs = Record({
+  token_a: Principal,
+  token_b: Principal,
+});
+
 export default Canister({
+  initialize: update([InitArgs], text, (args) => {
+    console.log({ args });
+    tokenA = args.token_a;
+    tokenB = args.token_b;
+    return "initialized";
+  }),
+
   listBalances: query([], text, () => {
     const balancesA = balanceA.keys().map((value) => {
       return {
@@ -66,101 +77,107 @@ export default Canister({
     return JSON.stringify({ balancesA, balancesB });
   }),
 
-  deposit: update(
-    [DepositArgs, text],
-    TransferFromResult,
-    async (transferArgs, token) => {
-      console.log({ env: process.env });
-      const tokenId =
-        token === "token_a"
-          ? "by6od-j4aaa-aaaaa-qaadq-cai"
-          : "avqkn-guaaa-aaaaa-qaaea-cai";
+  deposit: update([DepositArgs], TransferFromResult, async (transferArgs) => {
+    console.log({ env: process.env });
+    const tokenId = transferArgs.token.toString();
+    console.log({
+      icrc: transferArgs.token.toString(),
+      tokena: tokenA.toString(),
+      tokenb: tokenB.toString(),
+    });
+    const icrc = ICRC(Principal.fromText(transferArgs.token.toString()));
 
-      const icrc = ICRC(Principal.fromText(tokenId));
-      let balanceStore;
-      if (token === "token_a") balanceStore = balanceA;
-      if (token === "token_b") balanceStore = balanceB;
+    let balanceStore;
+    if (tokenId === tokenA.toString()) balanceStore = balanceA;
+    if (tokenId === tokenB.toString()) balanceStore = balanceB;
 
-      const oldBalance = balanceStore?.get(
-        transferArgs.from.owner.toString()
-      ).Some;
-      console.log({ oldBalance });
-      if (!oldBalance)
-        balanceStore?.insert(
-          transferArgs.from.owner.toString(),
-          Number(transferArgs.amount.toString())
-        );
-      else
-        balanceStore?.insert(
-          transferArgs.from.owner.toString(),
-          Number(transferArgs.amount.toString()) + oldBalance
-        );
+    const oldBalance = balanceStore?.get(
+      transferArgs.from.owner.toString()
+    ).Some;
 
-      // Load the fee from the token:
-      // The user can pass a null fee, which means uses the default. TO determine the default, it needs to be retrieved:
-      const fee = transferArgs.fee
-        ? transferArgs.fee
-        : await ic.call(icrc.icrc1_fee, { args: [] });
+    if (!oldBalance)
+      balanceStore?.insert(
+        transferArgs.from.owner.toString(),
+        Number(transferArgs.amount.toString())
+      );
+    else
+      balanceStore?.insert(
+        transferArgs.from.owner.toString(),
+        Number(transferArgs.amount.toString()) + oldBalance
+      );
 
-      const transferData: TransferArgs = {
-        ...transferArgs,
-        to: {
-          owner: Principal.fromText("bw4dl-smaaa-aaaaa-qaacq-cai"),
-          subaccount: None,
-        },
-        from_subaccount: None,
-        memo: None,
-        fee: fee,
-      };
+    // Load the fee from the token:
+    // The user can pass a null fee, which means uses the default. TO determine the default, it needs to be retrieved:
+    const fee = transferArgs.fee
+      ? transferArgs.fee
+      : await ic.call(icrc.icrc1_fee, { args: [] });
 
-      let transfer_result = await ic.call(icrc.icrc2_transfer_from, {
-        args: [transferData],
-      });
-      return transfer_result;
-    }
-  ),
+    const transferData: TransferArgs = {
+      ...transferArgs,
+      to: {
+        owner: Principal.fromText(ic.id().toString()),
+        subaccount: None,
+      },
+      from_subaccount: None,
+      memo: None,
+      fee: fee,
+    };
 
-  withdraw: update(
-    [TransferArgs, text],
-    TransferResult,
-    async (transferArgs, token) => {
-      const tokenId =
-        token === "token_a"
-          ? "by6od-j4aaa-aaaaa-qaadq-cai"
-          : "avqkn-guaaa-aaaaa-qaaea-cai";
-
-      const icrc = ICRC(Principal.fromText(tokenId));
-
-      let transfer_result = await ic.call(icrc.icrc1_transfer, {
-        args: [transferArgs],
-      });
-      return transfer_result;
-    }
-  ),
-
-  swap: update([text, text], text, (user_a, user_b) => {
-    // Give user_a's token_a to user_b:
-    // Add the the two user's token_a balances, and then give all of it to user_b:
-    const userABalanceForTokenA = balanceA.get(user_a).Some;
-    const userBBalanceForTokenA = balanceA.get(user_b).Some;
-    if (userABalanceForTokenA && userBBalanceForTokenA) {
-      balanceA.insert(user_b, userABalanceForTokenA + userBBalanceForTokenA);
-      balanceA.remove(user_a);
-    } else {
-      return "user_a and user_b dot not have deposits in token a";
-    }
-
-    // Give user_b's token_b to user_a:
-    // Add the the two user's token_b balances, and then give all of it to user_a:
-    const userABalanceForTokenB = balanceB.get(user_a).Some;
-    const userBBalanceForTokenB = balanceB.get(user_b).Some;
-    if (userABalanceForTokenB && userBBalanceForTokenB) {
-      balanceB.insert(user_a, userBBalanceForTokenB + userABalanceForTokenB);
-      balanceB.remove(user_b);
-    } else {
-      return "user_a and user_b dot not have deposits in token b";
-    }
-
-    return "Success";
+    let transfer_result = await ic.call(icrc.icrc2_transfer_from, {
+      args: [transferData],
+    });
+    return transfer_result;
   }),
+
+  withdraw: update([WithdrawArgs], TransferResult, async (transferArgs) => {
+    const tokenId = transferArgs.token.toString();
+
+    const icrc = ICRC(Principal.fromText(tokenId));
+
+    const transferData: TransferArgs = {
+      to: transferArgs.to,
+      from_subaccount: None,
+      memo: transferArgs.memo,
+      fee: transferArgs.fee,
+      amount: transferArgs.amount,
+      created_at_time: transferArgs.created_at_time,
+    };
+
+    let transfer_result = await ic.call(icrc.icrc1_transfer, {
+      args: [transferData],
+    });
+    return transfer_result;
+  }),
+
+  swap: update(
+    [Record({ user_a: Principal, user_b: Principal })],
+    text,
+    (swapArgs) => {
+      const user_a = swapArgs.user_a.toString();
+      const user_b = swapArgs.user_b.toString();
+      // Give user_a's token_a to user_b:
+      // Add the the two user's token_a balances, and then give all of it to user_b:
+      const userABalanceForTokenA = balanceA.get(user_a).Some;
+      const userBBalanceForTokenA = balanceA.get(user_b).Some;
+
+      balanceA.insert(
+        user_b,
+        (userABalanceForTokenA ?? 0) + (userBBalanceForTokenA ?? 0)
+      );
+      balanceA.remove(user_a);
+
+      // Give user_b's token_b to user_a:
+      // Add the the two user's token_b balances, and then give all of it to user_a:
+      const userABalanceForTokenB = balanceB.get(user_a).Some;
+      const userBBalanceForTokenB = balanceB.get(user_b).Some;
+
+      balanceB.insert(
+        user_a,
+        (userBBalanceForTokenB ?? 0) + (userABalanceForTokenB ?? 0)
+      );
+      balanceB.remove(user_b);
+
+      return "Success";
+    }
+  ),
 });

@@ -53069,12 +53069,32 @@ var DepositArgs = Record2({
   from: Account,
   amount: nat,
   fee: Opt2(nat),
-  memo: blob,
+  memo: Opt2(blob),
+  created_at_time: Opt2(nat64)
+});
+var WithdrawArgs = Record2({
+  token: Principal3,
+  to: Account,
+  amount: nat,
+  fee: Opt2(nat),
+  memo: Opt2(blob),
   created_at_time: Opt2(nat64)
 });
 var balanceA = StableBTreeMap(0);
 var balanceB = StableBTreeMap(1);
+var tokenA;
+var tokenB;
+var InitArgs = Record2({
+  token_a: Principal3,
+  token_b: Principal3
+});
 var backend_default = Canister({
+  initialize: update([InitArgs], text, (args2) => {
+    console.log({ args: args2 });
+    tokenA = args2.token_a;
+    tokenB = args2.token_b;
+    return "initialized";
+  }),
   listBalances: query([], text, () => {
     const balancesA = balanceA.keys().map((value) => {
       return {
@@ -53088,80 +53108,88 @@ var backend_default = Canister({
     });
     return JSON.stringify({ balancesA, balancesB });
   }),
-  deposit: update(
-    [DepositArgs, text],
-    TransferFromResult,
-    async (transferArgs, token) => {
-      console.log({ env: process.env });
-      const tokenId = token === "token_a" ? "by6od-j4aaa-aaaaa-qaadq-cai" : "avqkn-guaaa-aaaaa-qaaea-cai";
-      const icrc = ICRC(Principal3.fromText(tokenId));
-      let balanceStore;
-      if (token === "token_a")
-        balanceStore = balanceA;
-      if (token === "token_b")
-        balanceStore = balanceB;
-      const oldBalance = balanceStore?.get(
-        transferArgs.from.owner.toString()
-      ).Some;
-      console.log({ oldBalance });
-      if (!oldBalance)
-        balanceStore?.insert(
-          transferArgs.from.owner.toString(),
-          Number(transferArgs.amount.toString())
-        );
-      else
-        balanceStore?.insert(
-          transferArgs.from.owner.toString(),
-          Number(transferArgs.amount.toString()) + oldBalance
-        );
-      const fee = transferArgs.fee ? transferArgs.fee : await ic.call(icrc.icrc1_fee, { args: [] });
-      const transferData = {
-        ...transferArgs,
-        to: {
-          owner: Principal3.fromText("bw4dl-smaaa-aaaaa-qaacq-cai"),
-          subaccount: None
-        },
-        from_subaccount: None,
-        memo: None,
-        fee
-      };
-      let transfer_result = await ic.call(icrc.icrc2_transfer_from, {
-        args: [transferData]
-      });
-      return transfer_result;
-    }
-  ),
-  withdraw: update(
-    [TransferArgs, text],
-    TransferResult,
-    async (transferArgs, token) => {
-      const tokenId = token === "token_a" ? "by6od-j4aaa-aaaaa-qaadq-cai" : "avqkn-guaaa-aaaaa-qaaea-cai";
-      const icrc = ICRC(Principal3.fromText(tokenId));
-      let transfer_result = await ic.call(icrc.icrc1_transfer, {
-        args: [transferArgs]
-      });
-      return transfer_result;
-    }
-  ),
-  swap: update([text, text], text, (user_a, user_b) => {
-    const userABalanceForTokenA = balanceA.get(user_a).Some;
-    const userBBalanceForTokenA = balanceA.get(user_b).Some;
-    if (userABalanceForTokenA && userBBalanceForTokenA) {
-      balanceA.insert(user_b, userABalanceForTokenA + userBBalanceForTokenA);
+  deposit: update([DepositArgs], TransferFromResult, async (transferArgs) => {
+    console.log({ env: process.env });
+    const tokenId = transferArgs.token.toString();
+    console.log({
+      icrc: transferArgs.token.toString(),
+      tokena: tokenA.toString(),
+      tokenb: tokenB.toString()
+    });
+    const icrc = ICRC(Principal3.fromText(transferArgs.token.toString()));
+    let balanceStore;
+    if (tokenId === tokenA.toString())
+      balanceStore = balanceA;
+    if (tokenId === tokenB.toString())
+      balanceStore = balanceB;
+    const oldBalance = balanceStore?.get(
+      transferArgs.from.owner.toString()
+    ).Some;
+    if (!oldBalance)
+      balanceStore?.insert(
+        transferArgs.from.owner.toString(),
+        Number(transferArgs.amount.toString())
+      );
+    else
+      balanceStore?.insert(
+        transferArgs.from.owner.toString(),
+        Number(transferArgs.amount.toString()) + oldBalance
+      );
+    const fee = transferArgs.fee ? transferArgs.fee : await ic.call(icrc.icrc1_fee, { args: [] });
+    const transferData = {
+      ...transferArgs,
+      to: {
+        owner: Principal3.fromText(ic.id().toString()),
+        subaccount: None
+      },
+      from_subaccount: None,
+      memo: None,
+      fee
+    };
+    let transfer_result = await ic.call(icrc.icrc2_transfer_from, {
+      args: [transferData]
+    });
+    return transfer_result;
+  }),
+  withdraw: update([WithdrawArgs], TransferResult, async (transferArgs) => {
+    const tokenId = transferArgs.token.toString();
+    const icrc = ICRC(Principal3.fromText(tokenId));
+    const transferData = {
+      to: transferArgs.to,
+      from_subaccount: None,
+      memo: transferArgs.memo,
+      fee: transferArgs.fee,
+      amount: transferArgs.amount,
+      created_at_time: transferArgs.created_at_time
+    };
+    let transfer_result = await ic.call(icrc.icrc1_transfer, {
+      args: [transferData]
+    });
+    return transfer_result;
+  }),
+  swap: update(
+    [Record2({ user_a: Principal3, user_b: Principal3 })],
+    text,
+    (swapArgs) => {
+      const user_a = swapArgs.user_a.toString();
+      const user_b = swapArgs.user_b.toString();
+      const userABalanceForTokenA = balanceA.get(user_a).Some;
+      const userBBalanceForTokenA = balanceA.get(user_b).Some;
+      balanceA.insert(
+        user_b,
+        (userABalanceForTokenA ?? 0) + (userBBalanceForTokenA ?? 0)
+      );
       balanceA.remove(user_a);
-    } else {
-      return "user_a and user_b dot not have deposits in token a";
-    }
-    const userABalanceForTokenB = balanceB.get(user_a).Some;
-    const userBBalanceForTokenB = balanceB.get(user_b).Some;
-    if (userABalanceForTokenB && userBBalanceForTokenB) {
-      balanceB.insert(user_a, userBBalanceForTokenB + userABalanceForTokenB);
+      const userABalanceForTokenB = balanceB.get(user_a).Some;
+      const userBBalanceForTokenB = balanceB.get(user_b).Some;
+      balanceB.insert(
+        user_a,
+        (userBBalanceForTokenB ?? 0) + (userABalanceForTokenB ?? 0)
+      );
       balanceB.remove(user_b);
-    } else {
-      return "user_a and user_b dot not have deposits in token b";
+      return "Success";
     }
-    return "Success";
-  })
+  )
 });
 
 // <stdin>

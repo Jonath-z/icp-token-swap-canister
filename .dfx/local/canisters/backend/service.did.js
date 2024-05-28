@@ -10,11 +10,10 @@ export const idlFactory = ({ IDL }) => {
               'owner' : IDL.Principal,
               'subaccount' : IDL.Opt(IDL.Vec(IDL.Nat8)),
             }),
-            'memo' : IDL.Vec(IDL.Nat8),
+            'memo' : IDL.Opt(IDL.Vec(IDL.Nat8)),
             'created_at_time' : IDL.Opt(IDL.Nat64),
             'amount' : IDL.Nat,
           }),
-          IDL.Text,
         ],
         [
           IDL.Variant({
@@ -37,8 +36,17 @@ export const idlFactory = ({ IDL }) => {
         ],
         [],
       ),
+    'initialize' : IDL.Func(
+        [IDL.Record({ 'token_a' : IDL.Principal, 'token_b' : IDL.Principal })],
+        [IDL.Text],
+        [],
+      ),
     'listBalances' : IDL.Func([], [IDL.Text], ['query']),
-    'swap' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+    'swap' : IDL.Func(
+        [IDL.Record({ 'user_a' : IDL.Principal, 'user_b' : IDL.Principal })],
+        [IDL.Text],
+        [],
+      ),
     'withdraw' : IDL.Func(
         [
           IDL.Record({
@@ -47,12 +55,11 @@ export const idlFactory = ({ IDL }) => {
               'subaccount' : IDL.Opt(IDL.Vec(IDL.Nat8)),
             }),
             'fee' : IDL.Opt(IDL.Nat),
+            'token' : IDL.Principal,
             'memo' : IDL.Opt(IDL.Vec(IDL.Nat8)),
-            'from_subaccount' : IDL.Opt(IDL.Vec(IDL.Nat8)),
             'created_at_time' : IDL.Opt(IDL.Nat64),
             'amount' : IDL.Nat,
           }),
-          IDL.Text,
         ],
         [
           IDL.Variant({

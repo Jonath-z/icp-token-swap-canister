@@ -9,17 +9,39 @@
       "gzip": true,
       "assets": [["src/frontend/dist", "dist"]],
       "build_assets": "npm run build",
-      ".env": ["AZLE_TEST_FETCH"]
+      ".env": [
+        "AZLE_TEST_FETCH",
+        "CANISTER_ID_TOKEN_B",
+        "CANISTER_ID_TOKEN_A",
+        "CANISTER_ID_BACKEND"
+      ],
+      "declarations": {
+        "output": "test/dfx_generated/backend",
+        "node_compatibility": true
+      }
     },
     "token_a": {
       "type": "custom",
       "candid": "src/backend/token_a.did",
-      "wasm": "https://download.dfinity.systems/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/canisters/ic-icrc1-ledger.wasm.gz"
+      "wasm": "https://download.dfinity.systems/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/canisters/ic-icrc1-ledger.wasm.gz",
+      ".env": [
+        "AZLE_TEST_FETCH",
+        "CANISTER_ID_TOKEN_B",
+        "CANISTER_ID_TOKEN_A",
+        "CANISTER_ID_BACKEND"
+      ]
     },
     "token_b": {
       "type": "custom",
       "candid": "src/backend/token_b.did",
-      "wasm": "https://download.dfinity.systems/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/canisters/ic-icrc1-ledger.wasm.gz"
+      "wasm": "https://download.dfinity.systems/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/canisters/ic-icrc1-ledger.wasm.gz",
+      ".env": [
+        "AZLE_TEST_FETCH",
+        "CANISTER_ID_TOKEN_B",
+        "CANISTER_ID_TOKEN_A",
+        "CANISTER_ID_BACKEND"
+      ]
     }
-  }
+  },
+  "output_env_file": ".env"
 }

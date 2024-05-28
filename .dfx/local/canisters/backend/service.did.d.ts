@@ -13,11 +13,10 @@ export interface _SERVICE {
           'owner' : Principal,
           'subaccount' : [] | [Uint8Array | number[]],
         },
-        'memo' : Uint8Array | number[],
+        'memo' : [] | [Uint8Array | number[]],
         'created_at_time' : [] | [bigint],
         'amount' : bigint,
       },
-      string,
     ],
     { 'Ok' : bigint } |
       {
@@ -34,8 +33,15 @@ export interface _SERVICE {
           { 'InsufficientFunds' : { 'balance' : bigint } }
       }
   >,
+  'initialize' : ActorMethod<
+    [{ 'token_a' : Principal, 'token_b' : Principal }],
+    string
+  >,
   'listBalances' : ActorMethod<[], string>,
-  'swap' : ActorMethod<[string, string], string>,
+  'swap' : ActorMethod<
+    [{ 'user_a' : Principal, 'user_b' : Principal }],
+    string
+  >,
   'withdraw' : ActorMethod<
     [
       {
@@ -44,12 +50,11 @@ export interface _SERVICE {
           'subaccount' : [] | [Uint8Array | number[]],
         },
         'fee' : [] | [bigint],
+        'token' : Principal,
         'memo' : [] | [Uint8Array | number[]],
-        'from_subaccount' : [] | [Uint8Array | number[]],
         'created_at_time' : [] | [bigint],
         'amount' : bigint,
       },
-      string,
     ],
     { 'Ok' : bigint } |
       {
